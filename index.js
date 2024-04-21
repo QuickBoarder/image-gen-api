@@ -1,5 +1,14 @@
+import cors from 'cors';
+import express from 'express';
+import bodyParser from 'body-parser';
+import fetch from 'node-fetch';
 import { v2 as cloudinary } from 'cloudinary';
-import fetch from 'node-fetch'; // Assuming you have the node-fetch package installed
+import { v4 as uuidv4 } from 'uuid';
+
+const app = express();
+
+app.use(cors());
+app.use(bodyParser.json());
 
 cloudinary.config({
     cloud_name: 'dcwsgwsfw',
@@ -7,7 +16,18 @@ cloudinary.config({
     api_secret: 'pThBvxX6russhHj_jKySLVpFzoQ'
 });
 
-async function query(textPrompt) {
+function generatePrompts(objectName) {
+    const prompts = [
+        `${objectName} from front viewing angle`,
+        `${objectName} from back viewing angle`,
+        `${objectName} from right viewing angle`,
+        `${objectName} from left viewing angle`
+    ];
+
+    return prompts;
+}
+
+async function generateImage(textPrompt) {
     const data = { "inputs": textPrompt };
 
     const response = await fetch(
@@ -19,31 +39,47 @@ async function query(textPrompt) {
         }
     );
 
-    if (response.ok) {
-        const blob = await response.blob();
-        const fileData = await blob.arrayBuffer(); // Get the ArrayBuffer of the Blob
-
-        // Convert ArrayBuffer to base64 string
-        const base64Data = Buffer.from(fileData).toString('base64');
-
-        // Upload image to Cloudinary
-        const uploadResult = await cloudinary.uploader.upload(`data:image/png;base64,${base64Data}`, {
-            public_id: "generated_image", // Public ID for the uploaded image
-            folder: "generated_images" // Optional folder in Cloudinary
-        });
-
-        const imageUrl = uploadResult.secure_url; // URL of the uploaded image on Cloudinary
-
-        return imageUrl;
-    } else {
+    if (!response.ok) {
         throw new Error('Failed to fetch image.');
     }
+
+    const blob = await response.blob();
+    const fileData = await blob.arrayBuffer();
+
+    const base64Data = Buffer.from(fileData).toString('base64');
+
+    const uploadResult = await cloudinary.uploader.upload(`data:image/png;base64,${base64Data}`, {
+        public_id: `generated_image_${uuidv4()}`,
+        folder: "generated_images"
+    });
+
+    const imageUrl = uploadResult.secure_url;
+    return imageUrl;
 }
 
-// Usage example
-const textPrompt = "Astronaut riding a horse";
-query(textPrompt).then((imageUrl) => {
-    console.log('Uploaded image URL:', imageUrl);
-}).catch((error) => {
-    console.error('Error:', error);
+app.post('/api/genimg', async (req, res) => {
+    try {
+        const { objectName } = req.body;
+
+        if (!objectName) {
+            return res.status(400).json({ error: 'objectName is required' });
+        }
+
+        const prompts = generatePrompts(objectName);
+
+        const imageUrls = await Promise.all(prompts.map(async (textPrompt) => {
+            const imageUrl = await generateImage(textPrompt);
+            return imageUrl;
+        }));
+
+        res.status(200).json({ imageUrls });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
 });
