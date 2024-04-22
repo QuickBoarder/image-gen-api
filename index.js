@@ -4,16 +4,20 @@ import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
+
 
 const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
 
+dotenv.config();
+
 cloudinary.config({
-    cloud_name: 'dcwsgwsfw',
-    api_key: '596255516127773',
-    api_secret: 'pThBvxX6russhHj_jKySLVpFzoQ'
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 function generatePrompts(objectName) {
@@ -33,7 +37,7 @@ async function generateImage(textPrompt) {
     const response = await fetch(
         "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1",
         {
-            headers: { Authorization: "Bearer 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" },
+            headers: { Authorization: process.env.AUTHORIZATION_TOKEN },
             method: "POST",
             body: JSON.stringify(data),
         }
